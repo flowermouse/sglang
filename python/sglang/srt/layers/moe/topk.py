@@ -110,6 +110,9 @@ if _is_cuda:
                 renormalize,
             )
 
+        # fused_topk_deepseek requires SM >= 9.0 (Hopper+)
+        if torch.cuda.get_device_capability()[0] < 9:
+            fused_topk_deepseek = None
     except ImportError:
         fused_topk_deepseek = None
 

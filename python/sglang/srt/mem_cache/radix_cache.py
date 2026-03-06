@@ -605,7 +605,7 @@ class RadixCache(BasePrefixCache):
         return EvictResult(num_tokens_evicted=num_evicted)
 
     def inc_lock_ref(self, node: TreeNode):
-        if self.disable:
+        if self.disable or node is None:
             return 0
 
         delta = 0
@@ -620,7 +620,7 @@ class RadixCache(BasePrefixCache):
         return delta
 
     def dec_lock_ref(self, node: TreeNode):
-        if self.disable:
+        if self.disable or node is None:
             return 0
 
         delta = 0

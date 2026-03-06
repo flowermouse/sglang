@@ -86,8 +86,12 @@ class SchedulerDllmMixin:
                 req.check_finished(new_accepted_len=new_tokens)
 
                 if req.finished():
-                    release_kv_cache(req, self.tree_cache)
+                    # For needs_full_prefill, don't insert to radix cache (recomputes each round)
+                    is_insert = not (req.is_dllm() and req.dllm_config.needs_full_prefill)
+                    release_kv_cache(req, self.tree_cache, is_insert=is_insert)
                     req.time_stats.set_completion_time()
+
+                self.maybe_collect_customized_info(idx, req, result.logits_output)
 
             self.stream_output(batch.reqs, batch.return_logprob)
             self.token_to_kv_pool_allocator.free_group_end()

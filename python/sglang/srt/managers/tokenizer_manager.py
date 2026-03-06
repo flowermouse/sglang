@@ -1610,6 +1610,10 @@ class TokenizerManager(TokenizerCommunicatorMixin, TokenizerManagerMultiItemMixi
                     "meta_info": meta_info,
                 }
 
+            # Always track first token time for prefill/decode split
+            if state.time_stats.first_token_time == 0.0:
+                state.time_stats.set_first_token_time()
+
             state.finished = recv_obj.finished_reasons[i] is not None
             if state.finished:
                 state.time_stats.trace_ctx.trace_set_root_attrs(
@@ -1617,6 +1621,8 @@ class TokenizerManager(TokenizerCommunicatorMixin, TokenizerManagerMultiItemMixi
                 )
                 state.time_stats.set_finished_time()
                 meta_info["e2e_latency"] = state.time_stats.get_e2e_latency()
+                meta_info["prefill_time"] = state.time_stats.get_first_token_latency()
+                meta_info["decode_time"] = state.time_stats.get_decode_latency()
 
                 if self.server_args.speculative_algorithm:
                     self._calculate_spec_decoding_metrics(meta_info, recv_obj, i)

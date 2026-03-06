@@ -872,7 +872,13 @@ class Req(ReqDllmMixin):
         max_prefix_len = max(max_prefix_len, 0)
         token_ids = self.fill_ids[:max_prefix_len]
 
-        if tree_cache is not None:
+        # Bidirectional dLLM models (ENCODER_ONLY attention) recompute all tokens
+        # every round, so keep prefix_indices empty and skip tree cache matching.
+        if self.is_dllm() and self.dllm_config.needs_full_prefill:
+            self.prefix_indices = torch.empty((0,), dtype=torch.int64)
+            self.last_node = None
+            self.cache_protected_len = 0
+        elif tree_cache is not None:
             match_result = tree_cache.match_prefix(
                 MatchPrefixParams(
                     key=RadixKey(token_ids=token_ids, extra_key=self.extra_key),
@@ -1478,6 +1484,18 @@ class ScheduleBatch(ScheduleBatchDisaggregationDecodeMixin):
         self.seq_lens = seq_lens_tensor
         self.seq_lens_cpu = seq_lens_cpu
         self.extend_num_tokens = extend_num_tokens
+
+        # For needs_full_prefill models: free old KV slots before reallocating,
+        # since the full sequence is re-sent each round and prefix_indices is empty.
+        if self.is_dllm() and self.dllm_config.needs_full_prefill:
+            for req in reqs:
+                if req.kv_committed_len > 0 and req.req_pool_idx is not None:
+                    old_indices = self.req_to_token_pool.req_to_token[
+                        req.req_pool_idx, : req.kv_committed_len
+                    ]
+                    self.token_to_kv_pool_allocator.free(old_indices)
+                    req.kv_committed_len = 0
+                    req.cache_protected_len = 0
 
         # Allocate memory
         out_cache_loc, req_pool_indices_tensor, req_pool_indices = alloc_for_extend(
